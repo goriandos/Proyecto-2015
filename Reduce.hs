@@ -28,8 +28,38 @@ parallelFoldR f e (x:xs) = do
 	return (y `f` z)
 
 -- version paralela del reduce: utiliza la version paralela de foldr
-reducePar :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Eval (Dato)
-reducePar f e l = parallelFoldR f e l
+reducePar :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Dato
+reducePar f e l = runEval $ parallelFoldR f e l
+
+--reducePar :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Eval (Dato)
+--reducePar f e l = parallelFoldR f e l
+
+reducePar2 :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Dato
+reducePar2 _ e [] = e
+reducePar2 f e (a:[]) = a `f` e
+reducePar2 f e (a:b:[]) = a `f` b
+reducePar2 f e (a:b:c:[]) = (a `f` b) `f` c
+reducePar2 f e (a:b:c:d:arr) = runEval $ do
+       x <- rpar (a `f` b)
+       y <- rseq (c `f` d)
+       rseq x
+       return ((x `f` y) `f` (reducePar2 f e arr))
+       
+reducePar3 :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Dato
+reducePar3 f e [] = e
+reducePar3 f e (x:[]) = x `f` e
+reducePar3 f e (x:y:xs) = runEval $ do
+      a <- rpar (reducePar3 f e (mitadPrimera xs))
+      b <- rseq (reducePar3 f e (mitadSegunda xs))
+      rseq a
+      return ((x `f` y) `f` (a `f` b))
+
+reducePar4 :: (Dato -> Dato -> Dato) -> Dato -> ArrayRS -> Dato
+reducePar4 f e arr = runEval $ do
+      a <- rpar (reduceNoPar f e (mitadPrimera arr))
+      b <- rseq (reduceNoPar f e (mitadSegunda arr))
+      rseq a 
+      return (a `f` b)
 
 -- version paralela de reduce usando Strategy
 -- parStratFoldR es la version paralela de foldr usando esa biblioteca
