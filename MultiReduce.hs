@@ -111,6 +111,52 @@ auxMRUno f e n (l:ls) (x:xs)
    | n == l      = x `f` (auxMRUno f e n ls xs)
    | otherwise   = auxMRUno f e n ls xs
 
+-- ************************************
+
+multiReduceDos :: (Dato -> Dato -> Dato) -> Dato -> [Int] -> Labels -> ArrayRS -> [Dato]
+multiReduceDos f e xs etiqs vals = runEval $ do 
+   let largo = (length xs) `div` 4
+   let aes = Prelude.take largo xs
+   let aux = Prelude.drop largo xs
+   let bes = Prelude.take largo aux
+   let temp = Prelude.drop largo aux
+   let ces = Prelude.take largo temp
+   let des = Prelude.drop largo temp
+   a <- rpar(auxMultiReduceDos f e aes etiqs vals)
+   b <- rpar(auxMultiReduceDos f e bes etiqs vals)
+   c <- rpar(auxMultiReduceDos f e ces etiqs vals)
+   d <- rpar(auxMultiReduceDos f e des etiqs vals)
+   return (a Prelude.++ (b Prelude.++ (c Prelude.++ d)))
+   
+-- 
+multiReduceTres :: (Dato -> Dato -> Dato) -> Dato -> [Int] -> Labels -> ArrayRS -> [Dato]
+multiReduceTres _ _ [] _ _ = []
+multiReduceTres f e (x:xs) etiqs vals = runEval $ do
+    a <- rpar(auxMRUno f e x etiqs vals)
+    b <- rseq(multiReduceTres f e xs etiqs vals)
+    --b <- rpar(multiReduceTres f e xs etiqs vals)
+    --rseq a
+    --rseq b
+    return (a:b)
+    
+       
+-- auxiliar: llamada por MultiReduceDos
+auxMultiReduceDos :: (Dato -> Dato -> Dato) -> Dato -> [Int] -> Labels -> ArrayRS -> [Dato]
+auxMultiReduceDos _ _ [] _ _ = []
+auxMultiReduceDos f e (x:xs) labs vals = (auxMR2 f e x labs vals) : lista 
+      where lista = auxMultiReduceDos f e xs labs vals
+
+-- auxiliar: calcula el valor de MultiReduce para una etiqueta dada
+-- para multiReduce2, llamada por auxMultiReduceDos
+auxMR2 :: (Dato -> Dato -> Dato) -> Dato -> Int -> Labels -> ArrayRS -> Dato
+auxMR2 _ e _ [] _ = e
+auxMR2 f e n (l:ls) (v:vs) 
+   | n == l		= v `f` (auxMR2 f e n ls vs)
+   | otherwise	= auxMR2 f e n ls vs
+
+
+-- ************************************
+
 -- MultiReduce usando Strategy
 multiReduceStrategy :: (Dato -> Dato -> Dato) -> Dato -> Labels -> ArrayRS -> [Dato]
 multiReduceStrategy f e labs arr = Prelude.map (reduceStrat f e) arr'
@@ -145,6 +191,11 @@ repaMultiReduce f e labs arr = auxRepaMultiReduce f e l
 auxRepaMultiReduce :: (Dato -> Dato -> Dato) -> Dato -> [RepaArray U] -> [Dato]
 auxRepaMultiReduce _ _ [] = []
 auxRepaMultiReduce f e (x:xs) = (runIdentity (R.foldAllP f e x)) : (auxRepaMultiReduce f e xs)
+
+constMRM :: Labels -> ArrayRS -> [RepaArray U]
+constMRM labs arr = armarListaRepa l tams
+        where l = construir labs arr
+              tams = largos l
 
 -- MultiReduce usando Accelerate
 multiReduceAccelerate :: (Exp Dato -> Exp Dato -> Exp Dato) -> Exp Dato -> Labels -> ArrayRS -> [Scalar (Dato)]
